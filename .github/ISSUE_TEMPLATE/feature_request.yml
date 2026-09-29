@@ -1,0 +1,79 @@
+name: 功能建议 / Feature request
+description: 提出一个新的验签方案、模板能力、路由选项或集成场景
+title: '[feat] '
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        在写之前，先看一眼 [贡献指南](../blob/main/CONTRIBUTING.md) 里的「常见改动怎么做」——
+        加验签方案和加配置项都有固定清单。如果你愿意自己提 PR，欢迎说明。
+
+        > Reporting in English is welcome too — just answer in English.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你想解决什么问题
+      description: |
+        请描述**场景**而不是实现。比如「我想让 GitLab 的 pipeline 事件也能驱动会话」，
+        而不是「请加一个 x-gitlab-event 的解析」—— 后者我们会一起推导。
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: 现在怎么绕过的
+      description: 你现在用什么办法达到目的？这能帮我们判断这个需求有多必要。
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及的模块
+      options:
+        - 验签 / 新的上游平台
+        - 模板占位符
+        - 路由选项（并发、事件过滤、会话绑定）
+        - 回调与重试
+        - 设置卡片
+        - 诊断与观测
+        - 出站工具
+        - 文档
+        - 其他 / Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你希望的配置长什么样
+      description: |
+        如果这个功能需要有新的配置项，请写出你期望的 YAML 片段。
+        这通常是一次讨论里最有价值的部分。
+      render: yaml
+    validations:
+      required: false
+
+  - type: textarea
+    id: security
+    attributes:
+      label: 安全影响
+      description: |
+        这个改动会不会放宽鉴权、暴露载荷/请求头/密钥，或者让载荷能触达输出之外的地方？
+        如果会，请说明为什么这是可接受的，以及默认值应该是什么。
+        （本项目的原则是：默认值必须保守，放宽时必须可见。）
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已经搜索过现有 issue 与文档，没有重复。
+          required: true
+        - label: 我理解这个项目刻意不做 TLS、限流和来源白名单，因此不会把它们当作缺失功能来提。
+          required: true

@@ -1,0 +1,113 @@
+name: Bug 报告 / Bug report
+description: 报告 dsh-webhook 的行为与预期不符
+title: '[bug] '
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请先确认这不是安全漏洞 —— 安全问题请走
+        [私密漏洞报告渠道](https://github.com/jasondeng1997/dsh-webhook/security/advisories/new)，不要开公开 issue。
+
+        > Reporting in English is welcome too — just answer in English.
+
+  - type: input
+    id: version
+    attributes:
+      label: 插件版本
+      description: '`package.json` 里的 `version`，或 `GET /healthz` 返回的 `version`。'
+      placeholder: '0.1.0'
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: 运行环境
+      description: 'Node 版本、操作系统、DSH 版本。'
+      placeholder: 'Node 22.22.2 / macOS 15.0 / dsh-v0.1.5-alpha.2'
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: 受影响的模块
+      description: 不确定就选「不确定」，我们会一起定位。
+      options:
+        - 接收器 / 路由匹配（receiver, config）
+        - 验签（signature）
+        - 模板渲染（template）
+        - 载荷解析（payload）
+        - 投递流水线 / 并发（dispatcher）
+        - 回调与重试（outbound）
+        - 会话驱动（index）
+        - 设置卡片（client）
+        - 投递日志 / 诊断接口（delivery-log, receiver）
+        - 不确定 / Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 实际行为
+      description: 发生了什么？有报错就贴完整堆栈。
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+      description: 你期望发生什么？如果引用了文档里的说法，请一并说明在哪一节。
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 复现步骤
+      description: |
+        尽量给出最小复现：请求方法、路径、请求头、请求体，以及路由配置。
+        **请把密钥换成占位符，不要贴真实凭据。**
+      placeholder: |
+        1. 路由配置：
+           ```yaml
+           - id: ci
+             path: /hooks/ci
+             source: generic
+             secretRef: CI_WEBHOOK_SECRET
+           ```
+        2. 请求：
+           ```sh
+           curl -i -X POST http://127.0.0.1:8787/hooks/ci \
+             -H 'content-type: application/json' \
+             -H 'x-webhook-signature: sha256=<redacted>' \
+             -d '{"action":"opened"}'
+           ```
+        3. 结果：返回 `401`，预期 `202`。
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 相关日志与投递记录
+      description: |
+        启动日志里的配置问题、以及 `GET /deliveries` 的记录（投递记录不含载荷与密钥，可以安全粘贴）。
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已经搜索过现有 issue，没有重复。
+          required: true
+        - label: 我贴出的配置与日志中不包含真实密钥或令牌。
+          required: true
+        - label: 这不是一个安全漏洞（若是，我会走私密报告渠道）。
+          required: true

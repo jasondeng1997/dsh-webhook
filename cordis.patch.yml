@@ -1,0 +1,14 @@
+# dsh-webhook bundle layer.
+#
+# A profile that lists this bundle mounts one `dsh-webhook` row. Patch layers
+# replace a row's whole `config` value instead of deep-merging keys, so a user
+# overriding anything here should restate the keys they need; every key omitted
+# falls back to the schema default declared in src/config.ts.
+- insert:
+    - id: dsh-webhook
+      name: 'dsh-webhook'
+      config:
+        enabled: true
+        host: 127.0.0.1
+        port: 8787
+        routes: []
