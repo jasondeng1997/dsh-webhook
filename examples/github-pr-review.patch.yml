@@ -1,0 +1,62 @@
+# dsh-webhook 使用示例 —— GitHub PR 自动审阅
+#
+# 这是一个可以直接粘贴的 profile patch 文件。两条使用路径：
+#
+#   1. 直接追加到 ~/.dsh/profiles/web/cordis.patch.yml 的内容后面
+#      （该文件默认内容是一个空的 []，把 [] 换成下面这段即可）
+#   2. 如果它里面已经有 id: dsh-webhook 那一行，就只替换那一行的 config:
+#
+# 改完重启 dsh web（或桌面端）生效；密钥写在凭据库里，换密钥不用重启。
+#
+# 关于 patch 层的一条重要语义：它是「按 id 定位的覆盖」，同一行 id 的 config
+# 会被**整体替换**而不是逐键合并。所以下面把这个插件的配置写全了；你不需要
+# 的键删掉即可，删掉的键会回落到 schema 默认值（见 README 的配置项表）。
+
+- id: dsh-webhook
+  config:
+    enabled: true
+    # 只监听回环地址。要让 GitHub 打进来，用 cloudflared、ngrok 或你的反向代理
+    # 把流量转到这个端口，而不是把 host 改成 0.0.0.0。
+    host: 127.0.0.1
+    port: 8787
+    maxBodyBytes: 1048576
+    replyTimeoutMs: 600000
+    # 诊断接口 GET /deliveries 的口令。改成你自己的随机串；不设置则该接口不存在。
+    managementToken: 换成一个只有你知道的随机串
+
+    routes:
+      - id: pr-review
+        path: /hooks/github/pr
+        source: github
+        # 密钥存放在 ~/.dsh/.credentials.yaml 或启动环境变量里，名字就叫这个。
+        secretRef: GITHUB_WEBHOOK_SECRET
+        # 只处理 PR 事件。GitHub 保存 Webhook 时会先发一次 ping，不写这一行
+        # 那个 ping 也会驱动一次会话。
+        events: [pull_request]
+        # auto = 这条路由首次投递时建一个会话，之后所有 PR 复用同一个会话。
+        session: auto
+        # 换成你自己的仓库绝对路径 —— Agent 会在这个目录里读代码。
+        workspace: /path/to/your/repo
+        agentPreset: default
+        maxConcurrency: 2
+
+        template: |
+          GitHub 上有一个 PR 事件：{{ action }}
+          仓库：{{ repository.full_name }}
+          标题：{{ pull_request.title }}
+          作者：{{ pull_request.user.login }}
+          基点分支：{{ pull_request.base.ref }} ← {{ pull_request.head.ref }}
+          链接：{{ pull_request.html_url }}
+
+          请阅读这次改动，指出可能的缺陷、缺失的测试和风险点，输出一份简明的审阅意见。
+          需要看具体代码就自己读工作目录里的文件，不要凭猜测下结论。
+
+        instructions: |
+          用中文回答，控制在 15 行以内。结论先行，再列理由。
+
+        # Agent 回答的接收地址。这里填的是 examples/trigger.mjs 默认监听的端口，
+        # 方便你照着 examples/README.md 先本地跑通；真实部署换成你自己的服务。
+        callbackUrl: http://127.0.0.1:9099/dsh/reply
+        callbackHeaders:
+          x-dsh-route: '{{ __route }}'
+          x-dsh-delivery: '{{ __deliveryId }}'

@@ -22,211 +22,55 @@
  */
 
 import { createHmac } from 'node:crypto'
-import { existsSync } from 'node:fs'
 import { createServer } from 'node:http'
-import { createServer as createNetServer } from 'node:net'
 import { dirname, join } from 'node:path'
-import { pathToFileURL, fileURLToPath } from 'node:url'
+import { fileURLToPath } from 'node:url'
+
+import {
+  blue,
+  bold,
+  createLogger,
+  dim,
+  freePort,
+  green,
+  line,
+  red,
+  rule,
+  sleep,
+  yellow,
+} from './lib/terminal.mjs'
+import { createStubContext, createStubHarness, loadBundle, waitForHealth } from './lib/stub-harness.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const bundle = join(here, '..', 'lib', 'index.js')
 
-if (!existsSync(bundle)) {
-  console.error('找不到构建产物 lib/index.js —— 请先执行：npm run build')
-  process.exit(1)
-}
-
-const plugin = await import(pathToFileURL(bundle).href)
+const plugin = await loadBundle(bundle)
 
 // ---------------------------------------------------------------------------
-// Output helpers
-// ---------------------------------------------------------------------------
-
-const useColor = process.stdout.isTTY === true
-const paint = (code) => (text) => (useColor ? `\u001B[${code}m${text}\u001B[0m` : String(text))
-const dim = paint(2)
-const bold = paint(1)
-const red = paint(31)
-const green = paint(32)
-const yellow = paint(33)
-const blue = paint(36)
-
-const rule = (title) => {
-  console.log('')
-  const dashes = '─'.repeat(Math.max(0, 62 - displayWidth(title) - 3))
-  console.log(bold(blue(`── ${title} ${dashes}`)))
-}
-
-const line = (label, value, paintValue = (x) => x) => {
-  console.log(`  ${dim(padRight(label, 14))} ${paintValue(String(value))}`)
-}
-
-/**
- * Terminal cells a string occupies. CJK glyphs are double-width, so `padEnd`
- * on a Chinese label silently under-pads and the columns drift apart.
- */
-function displayWidth(text) {
-  let width = 0
-  for (const char of String(text)) {
-    const code = char.codePointAt(0)
-    const wide = (code >= 0x1100 && code <= 0x115F)
-      || (code >= 0x2E80 && code <= 0xA4CF)
-      || (code >= 0xAC00 && code <= 0xD7A3)
-      || (code >= 0xF900 && code <= 0xFAFF)
-      || (code >= 0xFE30 && code <= 0xFE6F)
-      || (code >= 0xFF00 && code <= 0xFF60)
-      || (code >= 0xFFE0 && code <= 0xFFE6)
-    width += wide ? 2 : 1
-  }
-  return width
-}
-
-/** Pad to a target display width rather than a character count. */
-function padRight(text, target) {
-  return String(text) + ' '.repeat(Math.max(0, target - displayWidth(text)))
-}
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-/** Ask the OS for a port nobody is using, then close it. */
-async function freePort() {
-  return await new Promise((resolve, reject) => {
-    const probe = createNetServer()
-    probe.once('error', reject)
-    probe.listen(0, '127.0.0.1', () => {
-      const { port } = probe.address()
-      probe.close(() => resolve(port))
-    })
-  })
-}
-
-// ---------------------------------------------------------------------------
-// The fake harness
+// The demo
 // ---------------------------------------------------------------------------
 
 /** How long the fake agent "thinks" for. */
 const AGENT_LATENCY_MS = 1_200
 
 /**
- * Build a stand-in for the harness: sessions that record messages, agents that
- * report `running`/`idle`, and a session controller that creates and prompts
- * them. This is the smallest surface `src/index.ts` touches.
+ * The fake answer. It reads the rendered prompt back rather than inventing an
+ * answer, so a template typo shows up in the callback body instead of staying
+ * invisible until a real model is asked about it.
  */
-function createFakeHarness(log) {
-  const sessions = new Map()
-  const prompts = []
-  let sequence = 0
-
-  const answer = (promptText, sessionId) => {
-    const turn = (sessions.get(sessionId)?.messages.length ?? 0) + 1
-    const highlights = promptText
-      .split('\n')
-      .filter((row) => /refs\/heads|失败提交|提交说明/.test(row))
-      .map((row) => `    ${row.trim()}`)
-    return [
-      '【演示用的假 Agent —— 真实部署里这里是模型的回答】',
-      `这是会话 ${sessionId} 的第 ${turn} 个回合，提示词 ${promptText.length} 字符。`,
-      '我从提示词里读到了：',
-      ...highlights,
-      `结论：${turn > 1 ? '这个会话我已经处理过同类事件，可以直接复用上下文。' : '首次收到该仓库的失败通知，需要先读日志。'}`,
-    ].join('\n')
-  }
-
-  return {
-    /** Every prompt submitted, in order — printed at the end of the demo. */
-    prompts,
-    /** Session ids the bridge created, in order. */
-    created: [],
-
-    create({ cwd, agentPreset }) {
-      const sessionId = `sess_${String(++sequence).padStart(2, '0')}`
-      sessions.set(sessionId, {
-        session: { id: sessionId, deriveMessages: () => entries.messages.slice() },
-        messages: [],
-        status: 'idle',
-        waiters: [],
-      })
-      const entries = sessions.get(sessionId)
-      this.created.push({ sessionId, cwd, agentPreset })
-      log('info', `[harness] sessionController.create({ cwd: %s, agentPreset: %s }) → %s`,
-        cwd ?? '-', agentPreset ?? '-', sessionId)
-      return { sessionId }
-    },
-
-    prompt({ sessionId, content, requestId }) {
-      const entry = sessions.get(sessionId)
-      if (entry === undefined) throw new Error(`no such session: ${sessionId}`)
-      const text = content.map((block) => block.text).join('\n')
-      prompts.push({ sessionId, requestId, text })
-      log('info', '[harness] sessionController.prompt(%s) — 假 Agent 开始思考 %dms', sessionId, AGENT_LATENCY_MS)
-      entry.status = 'running'
-      setTimeout(() => {
-        entry.messages.push({ role: 'assistant', content: [{ type: 'text', text: answer(text, sessionId) }] })
-        entry.status = 'idle'
-        entry.waiters.splice(0).forEach((resolve) => resolve())
-        log('info', '[harness] 假 Agent 回合结束，会话 %s 回到 idle', sessionId)
-      }, AGENT_LATENCY_MS)
-    },
-
-    sessionOf: (sessionId) => sessions.get(sessionId)?.session,
-
-    agentOf(sessionId) {
-      const entry = sessions.get(sessionId)
-      if (entry === undefined) return undefined
-      return {
-        get status() { return entry.status },
-        whenIdle: () => entry.status === 'idle'
-          ? Promise.resolve()
-          : new Promise((resolve) => entry.waiters.push(resolve)),
-      }
-    },
-  }
+const fakeAnswer = (promptText, sessionId, turn) => {
+  const highlights = promptText
+    .split('\n')
+    .filter((row) => /refs\/heads|失败提交|提交说明/.test(row))
+    .map((row) => `    ${row.trim()}`)
+  return [
+    '【演示用的假 Agent —— 真实部署里这里是模型的回答】',
+    `这是会话 ${sessionId} 的第 ${turn} 个回合，提示词 ${promptText.length} 字符。`,
+    '我从提示词里读到了：',
+    ...highlights,
+    `结论：${turn > 1 ? '这个会话我已经处理过同类事件，可以直接复用上下文。' : '首次收到该仓库的失败通知，需要先读日志。'}`,
+  ].join('\n')
 }
-
-/**
- * Build a stand-in cordis context exposing exactly the seams `apply` reaches
- * for. `credentials.resolve` is a lookup table, which is what a real credential
- * store amounts to from the plugin's side.
- */
-function createFakeContext(harness, log, secrets) {
-  const disposers = []
-  const get = (name) => {
-    if (name === 'credentials') {
-      return {
-        resolve: async (ref) => {
-          const hit = secrets[ref]
-          log('info', '[ctx] credentials.resolve(%s) → %s', ref, hit === undefined ? '未找到' : '命中')
-          return hit === undefined ? undefined : { value: hit }
-        },
-      }
-    }
-    // `settings` and `tools` stay uncomposed on purpose: `apply` is supposed to
-    // work without them, and this proves it rather than asserting it.
-    return undefined
-  }
-  const logger = (...args) => log('info', ...args)
-  logger.info = (...args) => log('info', ...args)
-  logger.warn = (...args) => log('warn', ...args)
-  logger.error = (...args) => log('error', ...args)
-  logger.debug = (...args) => log('debug', ...args)
-
-  const ctx = {
-    logger: () => logger,
-    get,
-    effect: (fn) => { disposers.push(fn()) },
-    sessionController: {
-      create: (options) => Promise.resolve(harness.create(options)),
-      prompt: (options) => Promise.resolve(harness.prompt(options)),
-    },
-    sessions: { get: (sessionId) => harness.sessionOf(sessionId) },
-    agents: { get: (sessionId) => harness.agentOf(sessionId) },
-  }
-  return { ctx, dispose: () => disposers.forEach((fn) => fn()) }
-}
-
-// ---------------------------------------------------------------------------
-// The demo
-// ---------------------------------------------------------------------------
 
 /** The shared secret the "credential store" hands back for the GitHub route. */
 const GITHUB_SECRET = 'a-demo-shared-secret-not-for-production'
@@ -253,21 +97,7 @@ const PUSH_PAYLOAD = {
 }
 
 const logs = []
-const log = (level, format, ...args) => {
-  let index = 0
-  const text = String(format).replace(/%[sdofjO%]/g, (token) => {
-    if (token === '%%') return '%'
-    const value = args[index++]
-    if (token === '%d') return String(Number(value))
-    if (token === '%o' || token === '%O' || token === '%j') {
-      try { return JSON.stringify(value) } catch { return String(value) }
-    }
-    return String(value)
-  })
-  logs.push({ level, text })
-  const tone = level === 'warn' ? yellow : level === 'error' ? red : dim
-  console.log(`  ${tone('│')} ${tone(text)}`)
-}
+const log = createLogger(logs)
 
 const port = await freePort()
 const callbackPort = await freePort()
@@ -298,8 +128,8 @@ console.log(dim(`  插件构建产物 ${bundle.replace(process.cwd() + '/', '')}
 
 rule('加载插件')
 
-const harness = createFakeHarness(log)
-const { ctx, dispose } = createFakeContext(harness, log, { GITHUB_WEBHOOK_SECRET: GITHUB_SECRET })
+const harness = createStubHarness({ log, latencyMs: AGENT_LATENCY_MS, answer: fakeAnswer })
+const { ctx, dispose } = createStubContext({ harness, log, secrets: { GITHUB_WEBHOOK_SECRET: GITHUB_SECRET } })
 
 console.log(`  ${dim('name  ')} ${plugin.name}`)
 console.log(`  ${dim('inject')} ${JSON.stringify(plugin.inject)}`)
@@ -357,14 +187,9 @@ console.log(`  ${dim('apply()')} 已调用，等待监听端口就绪…`)
 
 // Wait for the listener to answer, rather than sleeping a guessed amount.
 const health = `http://127.0.0.1:${port}/healthz`
-for (let attempt = 0; attempt < 60; attempt += 1) {
-  try {
-    const probe = await fetch(health)
-    if (probe.ok) break
-  } catch {
-    /* not listening yet */
-  }
-  await sleep(50)
+if (!await waitForHealth(health)) {
+  console.log(`  ${red('✗')} 端口 ${port} 没能起来`)
+  process.exit(1)
 }
 
 // ---------------------------------------------------------------------------

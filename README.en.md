@@ -87,6 +87,32 @@ It walks through six deliveries:
 
 It then prints the exact prompt the agent received, the full callback payload, the live `GET /healthz` and `GET /deliveries` responses, and which stage each delivery record reached.
 
+## Examples: verify your own deployment
+
+`demo.mjs` is good for seeing it work, but it puts the bridge and the caller in one process. A real deployment is two parts — a long-lived bridge, and something outside posting to it. The other two scripts in `examples/` have that shape. Two terminals:
+
+```sh
+npm run example:bridge      # terminal A: the bridge (fake harness, real plugin)
+npm run example:trigger -- --url http://127.0.0.1:8787/hooks/github/pr --secret dev-shared-secret
+                            # terminal B: pretend to be GitHub, sign a real delivery, listen for the answer
+```
+
+The simulator also walks the failure paths, which are where integrations actually break:
+
+| Scenario | Expect | What it verifies |
+|---|---|---|
+| `ok` / `replay` | `202` | the path works; `session: auto` puts both deliveries in one conversation |
+| `wrong-signature` / `unsigned` | `401` | a wrong secret, or no signature, is refused before the pipeline |
+| `wrong-event` | `202` | the `events` filter works; the agent is not woken |
+| `oversized` / `wrong-path` / `get` | `413` / `404` / `405` | the size limit, and the wrong path or method |
+
+```sh
+npm run example:trigger -- --url … --secret … --scenario wrong-signature
+npm run example:smoke       # all eight scenarios; exit code 0 means behaviour matched the docs
+```
+
+`examples/github-pr-review.patch.yml` is a **paste-ready** profile configuration, describing the same route `local-bridge.mjs` mounts (a test pins that). The checklist for going from local to real GitHub, plus a few traps worth knowing (GitLab's event name comes from a header, not the payload), is in [`examples/README.en.md`](examples/README.en.md).
+
 ## Quick start: review every pull request
 
 **1. Put a secret in the credential store.** Write it into `~/.dsh/.credentials.yaml` (the file is watched and hot-reloaded, so no restart):
@@ -241,10 +267,13 @@ See [`docs/security.en.md`](docs/security.en.md).
 
 ```sh
 npm install
-npm run check     # typecheck + unit tests + build + artifact shape check
-npm run test      # unit tests only
-npm run build     # build only
-npm run demo      # end-to-end demo: loads the built artifact, needs no DSH and no API key
+npm run check           # typecheck + unit tests + build + artifact shape check
+npm run test            # unit tests only
+npm run build           # build only
+npm run demo            # end-to-end demo: loads the built artifact, needs no DSH and no API key
+npm run example:bridge  # a long-lived bridge (fake harness, real plugin)
+npm run example:trigger # pretend to be the upstream, send a correctly signed delivery
+npm run example:smoke   # all eight scenarios; exit 0 means behaviour matched the docs
 ```
 
 The core logic — routing rules, signature schemes, templates, payload parsing, the retry policy, the delivery pipeline, the HTTP receiver, the delivery log, and the card's staging state machine — **does not depend on the harness**, so the unit tests need no host. The harness coupling lives in one file, `src/index.ts`.
@@ -261,6 +290,7 @@ More detail in [`CONTRIBUTING.en.md`](CONTRIBUTING.en.md).
 
 ## Documentation
 
+- [Examples and local verification](examples/README.en.md)
 - [Routes and upstream examples](docs/routes.en.md)
 - [Security model](docs/security.en.md)
 - [Contributing](CONTRIBUTING.en.md)

@@ -5,6 +5,45 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.1.2
+
+### Added
+
+- `examples/trigger.mjs`, an upstream simulator. It signs a realistic payload
+  with the scheme the route declares, posts it, and listens for the answer, so
+  the half of an integration you cannot schedule — a real GitHub delivery into
+  an endpoint only your machine can see — becomes one command. Eight scenarios
+  (`ok`, `replay`, `wrong-signature`, `unsigned`, `wrong-event`, `oversized`,
+  `wrong-path`, `get`) cover the failure paths; exit code 0 means behaviour
+  matched the documentation, so `--url` pointed at a real endpoint makes it a
+  post-deploy check.
+- `examples/local-bridge.mjs`, the bridge as a long-lived service behind a fake
+  harness — the shape a deployment actually has, one process listening and
+  another posting to it. It prints the profile YAML it is emulating.
+- `examples/github-pr-review.patch.yml`, a paste-ready profile configuration.
+- `examples/smoke.mjs` and `npm run example:smoke`: mounts the bridge in-process
+  and drives all eight scenarios, so the next change that breaks the examples
+  fails a command instead of being discovered by a reader. It runs in CI.
+- `test/examples.spec.ts`, which pins the example route across the profile file,
+  the local bridge and the trigger — three files that have to agree on the path,
+  the secret reference and the callback port, and whose disagreement would show
+  up as a callback that never arrives.
+
+### Fixed
+
+- `docs/routes.*.md` told GitLab and Gitee users to filter on `merge_request`
+  and `push`, which never match. The event name comes from a header, and those
+  upstreams spell it `Merge Request Hook` and `Push Hook`; the payload's
+  `object_kind` is not consulted when a header is present. Both examples are
+  corrected, and the header-versus-payload rule is documented under
+  Troubleshooting with the value format for all three upstreams.
+
+### Changed
+
+- `demo.mjs` no longer carries its own copy of the stub harness and the terminal
+  helpers; both moved to `examples/lib/` and are shared with the new scripts.
+  The demo's output is unchanged.
+
 ## 0.1.1
 
 ### Added
@@ -71,6 +110,7 @@ First release.
   payload parsing, retry policy, delivery pipeline, HTTP receiver, delivery log,
   and settings-card staging — all of them runnable without a harness.
 
-[Unreleased]: https://github.com/jasondeng1997/dsh-webhook/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/jasondeng1997/dsh-webhook/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/jasondeng1997/dsh-webhook/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/jasondeng1997/dsh-webhook/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/jasondeng1997/dsh-webhook/releases/tag/v0.1.0

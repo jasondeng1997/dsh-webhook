@@ -46,3 +46,11 @@ jobs:
       # the ordering above.
       - name: Verify artifacts
         run: node build.mjs --check
+
+      # The examples load the built artifact, which makes them the only place a
+      # packaging mistake is visible — and, since no unit test imports them, the
+      # easiest thing in the repo to leave broken. This drives all eight
+      # scenarios over a real loopback socket. No network beyond 127.0.0.1, no
+      # API key, no model call.
+      - name: Example smoke test
+        run: npm run example:smoke

@@ -63,7 +63,9 @@
         path: /hooks/gl/mr
         source: gitlab
         secretRef: GITLAB_WEBHOOK_TOKEN
-        events: [merge_request]
+        # 事件名取自 X-Gitlab-Event 请求头，它的写法是 "Merge Request Hook"。
+        # 载荷里的 object_kind 是 merge_request，但过滤器以请求头为准。
+        events: ['Merge Request Hook']
         session: auto
         template: |
           Merge Request 事件：{{ object_attributes.action }}
@@ -89,7 +91,8 @@ GitLab 也支持表单编码的请求体（`application/x-www-form-urlencoded`�
         path: /hooks/gitee/push
         source: gitee
         secretRef: GITEE_WEBHOOK_PASSWORD
-        events: [push]
+        # 同样取自请求头：X-Gitee-Event 的值是 "Push Hook"。
+        events: ['Push Hook']
         session: auto
         template: |
           推送事件
@@ -201,6 +204,17 @@ await fetch('https://hooks.example.com/hooks/order', {
 
 **模板里的字段全是空。**
 用投递记录里的 `missing` 列表核对字段路径；GitLab 的字段名和 GitHub 不同（例如 `object_attributes.title` 对应 GitLab，`pull_request.title` 对应 GitHub）。也可以先用 `{{ json }}` 把载荷原样打出来。
+
+**`events` 写了却不生效，投递总是被 `filtered`。**
+事件名取自**请求头**而不是载荷字段，两者不一致时以请求头为准，而三种上游的写法各不相同：
+
+| 上游 | 请求头 | 值的样子 |
+|---|---|---|
+| GitHub | `X-GitHub-Event` | `pull_request`、`push`、`workflow_run`、`ping`（小写下划线） |
+| GitLab | `X-Gitlab-Event` | `Merge Request Hook`、`Push Hook`、`Pipeline Hook` |
+| Gitee | `X-Gitee-Event` | `Merge Request Hook`、`Push Hook`、`Issue Hook` |
+
+所以 GitLab 上写 `events: [merge_request]` 永远不匹配 —— 载荷里的 `object_kind` 确实是 `merge_request`，但过滤器用的是请求头的 `Merge Request Hook`。拿不准就先不写 `events`，发一条投递看投递记录的 `event` 字段，或者用 `examples/trigger.mjs` 在本地立刻验一遍。
 
 **想先不配密钥试一下。**
 把路由设成 `allowUnsigned: true`，插件会在启动日志、`GET /healthz` 的 `problems` 计数和设置卡片里持续提醒你这是暴露状态。试完立刻关掉。

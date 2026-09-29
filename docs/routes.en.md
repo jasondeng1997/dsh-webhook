@@ -63,7 +63,10 @@ Setup:
         path: /hooks/gl/mr
         source: gitlab
         secretRef: GITLAB_WEBHOOK_TOKEN
-        events: [merge_request]
+        # The event name comes from the X-Gitlab-Event header, which spells it
+        # "Merge Request Hook". The payload's object_kind says merge_request, but
+        # the filter reads the header.
+        events: ['Merge Request Hook']
         session: auto
         template: |
           Merge request event: {{ object_attributes.action }}
@@ -89,7 +92,8 @@ GitLab also sends form-encoded bodies (`application/x-www-form-urlencoded`); the
         path: /hooks/gitee/push
         source: gitee
         secretRef: GITEE_WEBHOOK_PASSWORD
-        events: [push]
+        # Also from a header: X-Gitee-Event spells it "Push Hook".
+        events: ['Push Hook']
         session: auto
         template: |
           Push event
@@ -201,6 +205,17 @@ Read the record's `detail`: `timeout` means no new assistant turn appeared withi
 
 **Every template field is empty.**
 Check the paths against the record's `missing` list. GitLab and GitHub use different field names (`object_attributes.title` versus `pull_request.title`). Rendering `{{ json }}` prints the payload as-is while you work it out.
+
+**`events` is set but never matches — every delivery is `filtered`.**
+The event name comes from a **header**, not from a payload field, and the header wins when the two disagree. The three upstreams spell it differently:
+
+| Upstream | Header | Values look like |
+|---|---|---|
+| GitHub | `X-GitHub-Event` | `pull_request`, `push`, `workflow_run`, `ping` (lowercase, snake_case) |
+| GitLab | `X-Gitlab-Event` | `Merge Request Hook`, `Push Hook`, `Pipeline Hook` |
+| Gitee | `X-Gitee-Event` | `Merge Request Hook`, `Push Hook`, `Issue Hook` |
+
+So on GitLab, `events: [merge_request]` never matches: the payload's `object_kind` really is `merge_request`, but the filter compares against the header's `Merge Request Hook`. When unsure, leave `events` off, send one delivery, and read the `event` field of the delivery record — or check it locally with `examples/trigger.mjs`.
 
 **I want to try it without a secret.**
 Set `allowUnsigned: true` on the route. The plugin keeps reporting that exposure in the boot log, in `GET /healthz`'s problem count, and in the settings card. Turn it off as soon as you are done.

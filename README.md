@@ -87,6 +87,32 @@ npm run demo
 
 最后打印 Agent 实际收到的提示词、回调报文的完整结构、`GET /healthz` 与 `GET /deliveries` 的真实响应，以及投递日志里每条记录落在哪个阶段。
 
+## 示例：验证你自己的部署
+
+`demo.mjs` 适合看效果，但它把桥和调用方塞在一个进程里。真实部署是两个部分 —— 一个常驻的桥，和一个从外面打进来的上游。`examples/` 里的另外两个脚本就是这个形状，开两个终端：
+
+```sh
+npm run example:bridge      # 终端 A：起桥（假 Harness，真插件）
+npm run example:trigger -- --url http://127.0.0.1:8787/hooks/github/pr --secret dev-shared-secret
+                            # 终端 B：假装是 GitHub，用真签名发一条投递并监听回调
+```
+
+模拟器还会把错误路径也演一遍，这些都是接入时最容易踩的：
+
+| 场景 | 期望 | 验的是什么 |
+|---|---|---|
+| `ok` / `replay` | `202` | 链路通；`session: auto` 让两条投递落进同一个会话 |
+| `wrong-signature` / `unsigned` | `401` | 用错密钥、或者压根不签名，都会被拒且不进流水线 |
+| `wrong-event` | `202` | `events` 过滤生效，Agent 没被叫醒 |
+| `oversized` / `wrong-path` / `get` | `413` / `404` / `405` | 体积上限、路径与方法的错误分支 |
+
+```sh
+npm run example:trigger -- --url … --secret … --scenario wrong-signature
+npm run example:smoke       # 八个场景全跑一遍，退出码 0 表示行为与文档一致
+```
+
+`examples/github-pr-review.patch.yml` 是一份**可以直接粘贴**的 profile 配置，和 `local-bridge.mjs` 挂载的是同一条路由（有测试锁着这一点）。从本地切到真实 GitHub 的清单、以及几个容易踩的坑（比如 GitLab 的事件名取自请求头而不是载荷），见 [`examples/README.md`](examples/README.md)。
+
 ## 快速开始：GitHub PR 自动审阅
 
 **1. 在凭据库里放一个密钥。** 直接写进 `~/.dsh/.credentials.yaml`（该文件热加载，不需要重启）：
@@ -241,10 +267,13 @@ cloudflared tunnel --url http://127.0.0.1:8787
 
 ```sh
 npm install
-npm run check     # 类型检查 + 单元测试 + 构建 + 产物格式校验
-npm run test      # 只跑单元测试
-npm run build     # 只构建
-npm run demo      # 端到端演示：加载构建产物，不需要 DSH，不需要 API Key
+npm run check           # 类型检查 + 单元测试 + 构建 + 产物格式校验
+npm run test            # 只跑单元测试
+npm run build           # 只构建
+npm run demo            # 端到端演示：加载构建产物，不需要 DSH，不需要 API Key
+npm run example:bridge  # 起一个常驻的桥（假 Harness，真插件）
+npm run example:trigger # 假装是上游，发一条带真实签名的投递
+npm run example:smoke   # 八个场景全跑一遍，退出码 0 表示行为与文档一致
 ```
 
 核心逻辑（路由规则、验签、模板、载荷解析、重试策略、投递流水线、HTTP 接收器、投递日志、卡片状态机）**不依赖 Harness**，因此单测不需要启动宿主。与宿主的耦合集中在 `src/index.ts` 一个文件里。
@@ -261,6 +290,7 @@ dsh --profile web --dump-config     # 应能看到 "# == dsh-webhook" 层
 
 ## 文档
 
+- [示例与本地验证](examples/README.md)
 - [路由与上游接入示例](docs/routes.zh.md)
 - [安全模型](docs/security.zh.md)
 - [贡献指南](CONTRIBUTING.md)

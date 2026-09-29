@@ -1,5 +1,8 @@
 node_modules/
-lib/
+# Anchored: only the build output at the repository root. An unanchored `lib/`
+# also matches `examples/lib/`, which is source, not build output — the mistake
+# is invisible until the examples are cloned somewhere else and fail to start.
+/lib/
 *.tsbuildinfo
 .DS_Store
 .env

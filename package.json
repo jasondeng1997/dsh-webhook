@@ -1,6 +1,6 @@
 {
   "name": "dsh-webhook",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Bridge any HTTP webhook into DeepSeek Harness sessions: verify, route, prompt an agent, and push the answer back to your endpoint.",
   "keywords": [
     "dsh",
@@ -33,7 +33,9 @@
     "lib/**/*.js",
     "lib/**/*.js.map",
     "lib/types/**/*.d.ts",
-    "examples/demo.mjs",
+    "examples/**/*.mjs",
+    "examples/**/*.yml",
+    "examples/**/*.md",
     "cordis.patch.yml",
     "README.md",
     "README.en.md",
@@ -63,6 +65,9 @@
     "test:watch": "vitest",
     "check": "npm run typecheck && npm run test && npm run build -- --check",
     "demo": "npm run build --silent && node examples/demo.mjs",
+    "example:bridge": "npm run build --silent && node examples/local-bridge.mjs",
+    "example:trigger": "node examples/trigger.mjs",
+    "example:smoke": "npm run build --silent && node examples/smoke.mjs",
     "prepare": "node build.mjs"
   },
   "dependencies": {
