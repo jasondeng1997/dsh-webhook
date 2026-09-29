@@ -64,6 +64,29 @@ dsh plugin --profile web add -w github:jasondeng1997/dsh-webhook
 
 > 从 git 安装拉取的是**源码而非产物**，因此本包的 `prepare` 脚本会在安装时用 esbuild 构建 `lib/`。pnpm 10 及以上会拦截依赖的构建脚本，第一次 `add` 会失败并在提示里给出需要写入 profile `pnpm-workspace.yaml` 的 `allowBuilds` 键值，按其提示放行后重新执行即可。**放行等于允许该包在你机器上执行代码**，请只对你信任的源码这么做，并用 `#<commit-sha>` 固定提交。
 
+## 60 秒本地演示
+
+不想先装 DSH 也能看它跑起来。`examples/demo.mjs` 加载的是 `npm run build` 的产物（不是源码），用最小的桩替代 Harness 会话端口，于是整条链路都是真的：真的 HTTP 监听、真的 HMAC 验签、真的模板渲染、真的回调 POST、真的重试策略、真的投递日志。唯一假的是「模型回合」—— 用一个 1.2 秒定时器代替，所以**不需要 API Key，也不需要联网**。
+
+```sh
+git clone https://github.com/jasondeng1997/dsh-webhook && cd dsh-webhook
+npm install
+npm run demo
+```
+
+它会依次演示六个场景：
+
+| # | 场景 | 期望结果 |
+|---|---|---|
+| ① | 签名正确、事件匹配 | `202` → 建会话 → Agent 回答 → 回调收到 |
+| ② | 同一路由再来一条 | `202`，且**复用**同一个会话（`session: auto`） |
+| ③ | 签名错误 | `401`，投递根本不进流水线 |
+| ④ | 验签通过但事件不在 `events` 里 | `202`，不惊动 Agent |
+| ⑤ | 完全不带签名 | `401` —— 没有密钥就默认关闭，不降级放行 |
+| ⑥ | 显式 `allowUnsigned: true` 的路由 | `202`（主动选择，非默认） |
+
+最后打印 Agent 实际收到的提示词、回调报文的完整结构、`GET /healthz` 与 `GET /deliveries` 的真实响应，以及投递日志里每条记录落在哪个阶段。
+
 ## 快速开始：GitHub PR 自动审阅
 
 **1. 在凭据库里放一个密钥。** 直接写进 `~/.dsh/.credentials.yaml`（该文件热加载，不需要重启）：
@@ -221,6 +244,7 @@ npm install
 npm run check     # 类型检查 + 单元测试 + 构建 + 产物格式校验
 npm run test      # 只跑单元测试
 npm run build     # 只构建
+npm run demo      # 端到端演示：加载构建产物，不需要 DSH，不需要 API Key
 ```
 
 核心逻辑（路由规则、验签、模板、载荷解析、重试策略、投递流水线、HTTP 接收器、投递日志、卡片状态机）**不依赖 Harness**，因此单测不需要启动宿主。与宿主的耦合集中在 `src/index.ts` 一个文件里。

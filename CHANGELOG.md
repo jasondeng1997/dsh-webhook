@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.1.1
+
+### Added
+
+- `examples/demo.mjs`, runnable with `npm run demo`. It loads the **built**
+  artifact and drives it through a stand-in harness, so the receiver, the
+  signature check, the template renderer, the dispatcher, the callback POST, the
+  retry policy, and the delivery log can all be watched working without DSH
+  installed, without an API key, and without a network. It walks through six
+  deliveries: a valid one, a repeat that reuses the session, a bad signature, a
+  filtered event, a missing signature, and an explicitly unsigned route.
+
+### Fixed
+
+- Declared the two runtime imports `lib/index.js` actually makes.
+  `@deepseek-ai/schemastery` is now a `dependencies` entry and
+  `@deepseek-ai/dsh-tools` a `peerDependencies` entry, matching what the official
+  plugins declare. Neither was listed before, so loading the bundle depended on
+  the profile's hoisted `node_modules` happening to contain a compatible copy —
+  which it does for a default profile and does not for a strict one.
+
 ## 0.1.0
 
 First release.
@@ -50,5 +71,6 @@ First release.
   payload parsing, retry policy, delivery pipeline, HTTP receiver, delivery log,
   and settings-card staging — all of them runnable without a harness.
 
-[Unreleased]: https://github.com/jasondeng1997/dsh-webhook/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/jasondeng1997/dsh-webhook/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/jasondeng1997/dsh-webhook/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/jasondeng1997/dsh-webhook/releases/tag/v0.1.0

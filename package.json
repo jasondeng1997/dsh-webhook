@@ -1,6 +1,6 @@
 {
   "name": "dsh-webhook",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Bridge any HTTP webhook into DeepSeek Harness sessions: verify, route, prompt an agent, and push the answer back to your endpoint.",
   "keywords": [
     "dsh",
@@ -33,6 +33,7 @@
     "lib/**/*.js",
     "lib/**/*.js.map",
     "lib/types/**/*.d.ts",
+    "examples/demo.mjs",
     "cordis.patch.yml",
     "README.md",
     "README.en.md",
@@ -61,13 +62,21 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "npm run typecheck && npm run test && npm run build -- --check",
+    "demo": "npm run build --silent && node examples/demo.mjs",
     "prepare": "node build.mjs"
   },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.2"
+  },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.0"
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/dsh-tools": "^0.1.5-alpha.2"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis": {
+      "optional": false
+    },
+    "@deepseek-ai/dsh-tools": {
       "optional": false
     }
   },

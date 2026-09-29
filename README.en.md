@@ -64,6 +64,29 @@ dsh plugin --profile web add -w github:jasondeng1997/dsh-webhook
 
 > A git install fetches **sources, not built artifacts**, so this package's `prepare` script builds `lib/` with esbuild at install time. pnpm 10 and later refuses to run a dependency's build script until it is allowed; the first `add` fails and prints the exact `allowBuilds` key for the profile's `pnpm-workspace.yaml`. Allow it and re-run. **Allowing that is permission for the package to execute code on your machine** — only do it for sources you trust, and pin a commit with `#<commit-sha>`.
 
+## Sixty-second local demo
+
+You do not need DSH installed to watch this work. `examples/demo.mjs` loads the **built artifact** (`npm run build` output, not the sources) and drives it through a minimal stand-in for the harness, so the whole path is real: a real HTTP listener, a real HMAC check, a real template render, a real callback POST, the real retry policy, the real delivery log. The only thing faked is the model turn — a 1.2s timer stands in for it, which is why the demo needs **no API key and no network**.
+
+```sh
+git clone https://github.com/jasondeng1997/dsh-webhook && cd dsh-webhook
+npm install
+npm run demo
+```
+
+It walks through six deliveries:
+
+| # | Scenario | Expected |
+|---|---|---|
+| 1 | Valid signature, matching event | `202` → session created → agent answers → callback received |
+| 2 | A second delivery on the same route | `202`, reusing **the same session** (`session: auto`) |
+| 3 | Wrong signature | `401`; the delivery never reaches the pipeline |
+| 4 | Valid signature, event not in `events` | `202`; the agent is never woken |
+| 5 | No signature at all | `401` — no secret means closed, not degraded |
+| 6 | A route with explicit `allowUnsigned: true` | `202` (a deliberate opt-out, not a default) |
+
+It then prints the exact prompt the agent received, the full callback payload, the live `GET /healthz` and `GET /deliveries` responses, and which stage each delivery record reached.
+
 ## Quick start: review every pull request
 
 **1. Put a secret in the credential store.** Write it into `~/.dsh/.credentials.yaml` (the file is watched and hot-reloaded, so no restart):
@@ -221,6 +244,7 @@ npm install
 npm run check     # typecheck + unit tests + build + artifact shape check
 npm run test      # unit tests only
 npm run build     # build only
+npm run demo      # end-to-end demo: loads the built artifact, needs no DSH and no API key
 ```
 
 The core logic — routing rules, signature schemes, templates, payload parsing, the retry policy, the delivery pipeline, the HTTP receiver, the delivery log, and the card's staging state machine — **does not depend on the harness**, so the unit tests need no host. The harness coupling lives in one file, `src/index.ts`.

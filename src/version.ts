@@ -7,7 +7,7 @@
  */
 
 /** The running plugin version. */
-export const VERSION = '0.1.0'
+export const VERSION = '0.1.1'
 
 /** Settings namespace shared by the host section and the browser card. */
 export const SETTINGS_NAMESPACE = 'dsh-webhook'
